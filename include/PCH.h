@@ -77,6 +77,15 @@ namespace util
 
 bool SetupSpellCastHandler();
 
+void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
+{
+	switch (a_msg->type) {
+	case SKSE::MessagingInterface::kDataLoaded:
+		SetupSpellCastHandler();
+		break;
+	}
+}
+
 void InitializeLog()
 {
 #ifndef NDEBUG
@@ -113,7 +122,8 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 	InitializeLog();
 	logger::info("Loaded plugin");
 	SKSE::Init(a_skse);
-	return SetupSpellCastHandler();
+	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
+	return true;
 }
 
 extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() noexcept {

@@ -7,8 +7,14 @@ class SpellCastEventHandler : public RE::BSTEventSink<RE::TESSpellCastEvent>
 public:
 	std::shared_mutex settings_mtx;
 
+	std::map<std::string, std::string> shout_names_to_editor_ids; // Because of skyrim's default caching issues
+
 	std::map<std::string, std::vector<RE::ActorValue>> shout_values;
-	std::vector<RE::ActorValue> default_actor_values = { RE::ActorValue::kHealth, RE::ActorValue::kMagicka, RE::ActorValue::kStamina };
+	std::vector<RE::ActorValue> default_actor_values = { RE::ActorValue::kHealth, RE::ActorValue::kMagicka, 
+		RE::ActorValue::kStamina };
+
+	RE::TESShout* previous_shout;
+	float previous_shout_time = 0.0f;
 
 	//float GetCurrentHealthPercentage(RE::ActorValueOwner* av_owner);
 
@@ -23,13 +29,21 @@ public:
 	void ProcessEquippedHand(RE::Actor* player, RE::ActorValueOwner* av_owner, bool use_left_hand, float amount);
 	*/
 
+	float CalculateShoutCosts(RE::TESShout* shout, float shout_time, float recovery_time);
+	void ApplyMatchedShoutCosts(std::string& shout_identifier, float recovery_time, RE::Actor* player,
+		RE::ActorValueOwner* av_owner, bool& has_remaining_av);
 	bool ApplyShoutCosts(RE::TESShout* shout, float recovery_time);
 
+	float GetTimeOfShout();
 	RE::HighProcessData* GetPlayerData();
+
 	void AsyncSetupRecover(RE::TESShout* shout);
 	void AsyncRecover(RE::TESShout* shout);
 	
 	void HandleShout(RE::TESObjectREFR* caster, RE::SpellItem* casted_power);
+
+	std::string CheckEditorID(std::string& editor_id);
+	std::vector<std::string> GetValues(std::string& values);
 
 	void ImportFile(std::string& file_path, std::map<std::string, RE::ActorValue>& actor_value_mapping);
 	void ImportSettings();

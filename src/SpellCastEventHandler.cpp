@@ -70,26 +70,49 @@ void SpellCastEventHandler::ProcessEquippedHand(RE::Actor* player, RE::ActorValu
 }
 */
 
+void SpellCastEventHandler::ApplyMatchedShoutCosts(std::string& shout_identifier, float recovery_time, RE::Actor* player, 
+	RE::ActorValueOwner* av_owner, bool& has_remaining_av)
+{
+	auto& given_values = shout_values[shout_identifier];
+	auto num_values = given_values.size();
+	if (num_values > 0) {
+		for (int idx = 0; idx < num_values; idx++) {
+			bool remaining = RemoveActorValue(player, av_owner, given_values[idx], recovery_time / num_values);
+			has_remaining_av = has_remaining_av || remaining;
+		}
+	} else {
+		has_remaining_av = RemoveActorValue(player, av_owner, GetDefaultActorValue(shout_identifier), recovery_time);
+	}
+}
+
 bool SpellCastEventHandler::ApplyShoutCosts(RE::TESShout* shout, float recovery_time) {
 	bool has_remaining_av = false;
 	auto player = RE::PlayerCharacter::GetSingleton()->As<RE::Actor>();
 	auto av_owner = player->AsActorValueOwner();
 	std::string shout_name = shout->GetName();
+	std::string shout_editor_id = shout->GetFormEditorID();
 	if (shout_values.contains(shout_name)) {
-		auto& given_values = shout_values[shout_name];
-		auto num_values = given_values.size();
-		if (num_values > 0) {
-			for (int idx = 0; idx < num_values; idx++) {
-				bool remaining = RemoveActorValue(player, av_owner, given_values[idx], recovery_time / num_values);
-				has_remaining_av = has_remaining_av || remaining;
-			}
-		} else {
-			has_remaining_av = RemoveActorValue(player, av_owner, GetDefaultActorValue(shout_name), recovery_time);
-		}
+		ApplyMatchedShoutCosts(shout_name, recovery_time, player, av_owner, has_remaining_av);
 	} else {
+		logger::info("Has neither = {}", shout_editor_id);
 		has_remaining_av = RemoveActorValue(player, av_owner, GetDefaultActorValue(shout_name), recovery_time);
 	}
 	return has_remaining_av;
+}
+
+float SpellCastEventHandler::CalculateShoutCosts(RE::TESShout* shout, float shout_time, float recovery_time) {
+	float base_cost = 10.0f;
+	float time_difference = shout_time - previous_shout_time;
+	//float time_cost = (shout == previous_shout) ? 
+
+}
+
+float SpellCastEventHandler::GetTimeOfShout() {
+	auto calendar = RE::Calendar::GetSingleton();
+	if (calendar) {
+		return calendar->GetCurrentGameTime() * 3600 * 24 / calendar->GetTimescale();
+	}
+	return 0.0f;
 }
 
 RE::HighProcessData* SpellCastEventHandler::GetPlayerData()
@@ -126,11 +149,14 @@ void SpellCastEventHandler::AsyncRecover(RE::TESShout* shout)
 			player->GetActorRuntimeData().currentProcess->InHighProcess()) {
 			task_interface->AddTask([this, player, shout]() -> void {
 				auto player_data = GetPlayerData();
+				float current_time = GetTimeOfShout();
 				float current_recovery_time = player_data->voiceRecoveryTime;
 				bool has_remaining_av = ApplyShoutCosts(shout, current_recovery_time + 10.0f);
 				if (has_remaining_av) {
 					GetPlayerData()->voiceRecoveryTime = 0.0f;
 				}
+				previous_shout = shout;
+				previous_shout_time = GetTimeOfShout();
 			});
 		}
 	}
@@ -145,7 +171,16 @@ void SpellCastEventHandler::HandleShout(RE::TESObjectREFR* caster, RE::SpellItem
 	}
 }
 
-std::vector<std::string> GetValues(std::string& values) {
+std::string SpellCastEventHandler::CheckEditorID(std::string& editor_id)
+{
+	RE::TESForm* given_form = RE::TESForm::LookupByEditorID(editor_id);
+	if (given_form) {
+		return std::string(given_form->GetName());
+	}
+	return editor_id;
+}
+
+std::vector<std::string> SpellCastEventHandler::GetValues(std::string& values) {
 	char delimiter = ',';
 	std::vector<std::string> words;
 	std::string token;
@@ -179,13 +214,14 @@ void SpellCastEventHandler::ImportFile(std::string& file_path, std::map<std::str
 		auto values = ini.GetValue("Mappings", c_editor_id, "");
 		std::string s_values(values);
 		auto split_values = GetValues(s_values);
+		editor_id = CheckEditorID(editor_id);
 		if (!shout_values.contains(editor_id)) {
 			std::vector<RE::ActorValue> new_values;
 			shout_values[editor_id] = new_values;
-		}
-		for (auto& split_value : split_values) {
-			if (actor_value_mapping.contains(split_value)) {
-				shout_values[editor_id].push_back(actor_value_mapping[split_value]);
+			for (auto& split_value : split_values) {
+				if (actor_value_mapping.contains(split_value)) {
+					shout_values[editor_id].push_back(actor_value_mapping[split_value]);
+				}
 			}
 		}
 	}
