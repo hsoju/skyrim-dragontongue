@@ -94,7 +94,6 @@ bool SpellCastEventHandler::ApplyShoutCosts(RE::TESShout* shout, float recovery_
 	if (shout_values.contains(shout_name)) {
 		ApplyMatchedShoutCosts(shout_name, recovery_time, player, av_owner, has_remaining_av);
 	} else {
-		logger::info("Has neither = {}", shout_editor_id);
 		has_remaining_av = RemoveActorValue(player, av_owner, GetDefaultActorValue(shout_name), recovery_time);
 	}
 	return has_remaining_av;
